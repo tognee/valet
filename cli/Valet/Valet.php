@@ -6,7 +6,7 @@ use GuzzleHttp\Client;
 
 class Valet
 {
-    public $valetBin = BREW_PREFIX.'/bin/valet';
+    public $valetBin = BREW_PREFIX.'/usr/local/bin/valet';
 
     public function __construct(public CommandLine $cli, public Filesystem $files) {}
 
@@ -48,7 +48,7 @@ class Valet
     {
         $this->files->ensureDirExists('/etc/sudoers.d');
 
-        $this->files->put('/etc/sudoers.d/valet', 'Cmnd_Alias VALET = '.BREW_PREFIX.'/bin/valet *
+        $this->files->put('/etc/sudoers.d/valet', 'Cmnd_Alias VALET = '.BREW_PREFIX.'/usr/local/bin/valet *
 %admin ALL=(root) NOPASSWD:SETENV: VALET'.PHP_EOL);
     }
 
@@ -86,7 +86,7 @@ class Valet
     NOTE: Composer may have other dependencies for other global apps you have installed, and those may not be compatible with your default PHP.
 3. Finish removing any Composer fragments of Valet:
     Run <info>composer global remove laravel/valet</info>
-    and then <info>rm '.BREW_PREFIX.'/bin/valet</info> to remove the Valet bin link if it still exists.
+    and then <info>rm '.BREW_PREFIX.'/usr/local/bin/valet</info> to remove the Valet bin link if it still exists.
 
 Optional:
 - <info>brew list --formula</info> will show any other Homebrew services installed, in case you want to make changes to those as well.
