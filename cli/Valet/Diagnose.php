@@ -29,7 +29,7 @@ class Diagnose
         'which -a php-fpm',
         'php-fpm -v',
         'sudo php-fpm -y '.PHP_SYSCONFDIR.'/php-fpm.conf --test',
-        'ls -al /Library/LaunchDaemons | grep "com.laravel.valet."', // use systemd
+        // 'ls -al /Library/LaunchDaemons | grep "com.laravel.valet."', // use systemd
         'ls -aln /etc/resolv.conf',
         'cat /etc/resolv.conf',
         'ifconfig lo0',

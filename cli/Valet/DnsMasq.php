@@ -149,6 +149,6 @@ class DnsMasq
      */
     public function dnsmasqUserConfigDir(): string
     {
-        return $_SERVER['HOME'].'/.config/valet/dnsmasq.d/';
+        return '/home/tognee/.config/valet/dnsmasq.d/';
     }
 }

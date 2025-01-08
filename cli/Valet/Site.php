@@ -542,15 +542,6 @@ class Site
         $caKeyPath = $this->caPath('LaravelValetCASelfSigned.key');
 
         if ($this->files->exists($caKeyPath) && $this->files->exists($caPemPath)) {
-
-            $isTrusted = $this->cli->run(sprintf(
-                'security verify-cert -c "%s"', $caPemPath
-            ));
-
-            if (strpos($isTrusted, '...certificate verification successful.') === false) {
-                $this->trustCa($caPemPath);
-            }
-
             return;
         }
 
@@ -564,17 +555,15 @@ class Site
             $this->files->unlink($caPemPath);
         }
 
-        $this->cli->run(sprintf(
-            'sudo security delete-certificate -c "%s" /Library/Keychains/System.keychain',
-            $cName
-        ));
-
         $this->cli->runAsUser(sprintf(
             'openssl req -new -newkey rsa:2048 -days %s -nodes -x509 -subj "/C=/ST=/O=%s/localityName=/commonName=%s/organizationalUnitName=Developers/emailAddress=%s/" -keyout "%s" -out "%s"',
             $caExpireInDays, $oName, $cName, 'rootcertificate@laravel.valet', $caKeyPath, $caPemPath
         ));
+
+        // Trust CA certificate system-wide
         $this->trustCa($caPemPath);
     }
+
 
     /**
      * If CA and root certificates exist, remove them.
@@ -589,12 +578,9 @@ class Site
             }
         }
 
-        $cName = 'Laravel Valet CA Self Signed CN';
-
-        $this->cli->run(sprintf(
-            'sudo security delete-certificate -c "%s" /Library/Keychains/System.keychain',
-            $cName
-        ));
+        // Remove from trusted certificates
+        $this->cli->run('sudo rm -f /etc/ssl/certs/laravel-valet-ca.pem');
+        $this->cli->run('sudo update-ca-certificates');
     }
 
     /**
@@ -621,18 +607,10 @@ class Site
             $caSrlParam .= ' -CAcreateserial';
         }
 
-        $result = $this->cli->runAsUser(sprintf(
+        $this->cli->runAsUser(sprintf(
             'openssl x509 -req -sha256 -days %s -CA "%s" -CAkey "%s" %s -in "%s" -out "%s" -extensions v3_req -extfile "%s"',
             $caExpireInDays, $caPemPath, $caKeyPath, $caSrlParam, $csrPath, $crtPath, $confPath
         ));
-
-        // If cert could not be created using runAsUser(), use run().
-        if (strpos($result, 'Permission denied') !== false) {
-            $this->cli->run(sprintf(
-                'openssl x509 -req -sha256 -days %s -CA "%s" -CAkey "%s" %s -in "%s" -out "%s" -extensions v3_req -extfile "%s"',
-                $caExpireInDays, $caPemPath, $caKeyPath, $caSrlParam, $csrPath, $crtPath, $confPath
-            ));
-        }
     }
 
     /**
@@ -660,13 +638,10 @@ class Site
     public function trustCa(string $caPemPath): void
     {
         info('Trusting Laravel Valet Certificate Authority...');
-        $result = $this->cli->run(sprintf(
-            'sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain "%s"',
-            $caPemPath
-        ));
-        if ($result) {
-            throw new DomainException('The Certificate Authority must be trusted. Please run the command again.');
-        }
+
+        // Copy CA to system certificate store
+        $this->cli->run(sprintf('sudo cp %s /etc/ssl/certs/laravel-valet-ca.pem', $caPemPath));
+        $this->cli->run('sudo update-ca-certificates');
     }
 
     /**
@@ -674,9 +649,9 @@ class Site
      */
     public function trustCertificate(string $crtPath): void
     {
-        $this->cli->run(sprintf(
-            'sudo security add-trusted-cert -d -r trustAsRoot -k /Library/Keychains/System.keychain "%s"', $crtPath
-        ));
+        // Individual site certificates don't need to be explicitly trusted
+        // as they're signed by our trusted CA
+        return;
     }
 
     /**
@@ -760,7 +735,7 @@ class Site
      */
     public function unsecure(string $url): void
     {
-        // Extract in order to later preserve custom PHP version config when unsecuring. Example output: "74"
+        // Extract in order to later preserve custom PHP version config when unsecuring
         $phpVersion = $this->customPhpVersion($url);
 
         if ($this->files->exists($this->certificatesPath($url, 'crt'))) {
@@ -772,14 +747,7 @@ class Site
             $this->files->unlink($this->certificatesPath($url, 'crt'));
         }
 
-        $this->cli->run(sprintf('sudo security delete-certificate -c "%s" /Library/Keychains/System.keychain', $url));
-        $this->cli->run(sprintf('sudo security delete-certificate -c "*.%s" /Library/Keychains/System.keychain', $url));
-        $this->cli->run(sprintf(
-            'sudo security find-certificate -e "%s%s" -a -Z | grep SHA-1 | sudo awk \'{system("security delete-certificate -Z \'$NF\' /Library/Keychains/System.keychain")}\'',
-            $url, '@laravel.valet'
-        ));
-
-        // If the user had isolated the PHP version for this site, swap out .sock file
+        // If the user had isolated the PHP version for this site, swap out sock file
         if ($phpVersion) {
             $this->isolate($url, $phpVersion);
         }
