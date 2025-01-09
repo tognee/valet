@@ -15,7 +15,7 @@ if (! defined('VALET_HOME_PATH')) {
     if (testing()) {
         define('VALET_HOME_PATH', __DIR__.'/../../tests/config/valet');
     } else {
-        define('VALET_HOME_PATH', '/home/tognee/.config/valet');
+        define('VALET_HOME_PATH', '/home/'.user().'/.config/valet');
     }
 }
 if (! defined('VALET_STATIC_PREFIX')) {
