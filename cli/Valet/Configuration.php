@@ -16,6 +16,7 @@ class Configuration
         $this->createSitesDirectory();
         $this->createLogDirectory();
         $this->createCertificatesDirectory();
+        $this->createTempDirectory();
         $this->ensureBaseConfiguration();
 
         $this->files->chown($this->path(), user());
@@ -79,6 +80,14 @@ class Configuration
     public function createCertificatesDirectory(): void
     {
         $this->files->ensureDirExists(VALET_HOME_PATH.'/Certificates', user());
+    }
+
+    /**
+     * Create the directory for temp files.
+     */
+    public function createTempDirectory(): void
+    {
+        $this->files->ensureDirExists(VALET_HOME_PATH.'/Temp', user());
     }
 
     /**

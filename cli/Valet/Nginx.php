@@ -23,6 +23,7 @@ class Nginx
 
         $this->installConfiguration();
         $this->installServer();
+        $this->installTempDirectories();
         $this->installNginxDirectory();
     }
 
@@ -79,6 +80,17 @@ class Nginx
         $this->files->putAsUser($nginxDirectory.'/.keep', PHP_EOL);
 
         $this->rewriteSecureNginxFiles();
+    }
+
+    public function installTempDirectories(): void
+    {
+        $this->files->ensureDirExists(VALET_HOME_PATH.'/Temp/Nginx', user());
+
+        $this->files->ensureDirExists(VALET_HOME_PATH.'/Temp/Nginx/client_body', user());
+        $this->files->ensureDirExists(VALET_HOME_PATH.'/Temp/Nginx/proxy', user());
+        $this->files->ensureDirExists(VALET_HOME_PATH.'/Temp/Nginx/fastcgi', user());
+        $this->files->ensureDirExists(VALET_HOME_PATH.'/Temp/Nginx/uwdsi', user());
+        $this->files->ensureDirExists(VALET_HOME_PATH.'/Temp/Nginx/scgi', user());
     }
 
     /**
