@@ -15,7 +15,7 @@ if (! defined('VALET_HOME_PATH')) {
     if (testing()) {
         define('VALET_HOME_PATH', __DIR__.'/../../tests/config/valet');
     } else {
-        define('VALET_HOME_PATH', $_SERVER['HOME'].'/.config/valet');
+        define('VALET_HOME_PATH', '/home/'.user().'/.config/valet');
     }
 }
 if (! defined('VALET_STATIC_PREFIX')) {
@@ -25,7 +25,7 @@ if (! defined('VALET_STATIC_PREFIX')) {
 define('VALET_LOOPBACK', '127.0.0.1');
 define('VALET_SERVER_PATH', realpath(__DIR__.'/../../server.php'));
 
-define('BREW_PREFIX', (new CommandLine)->runAsUser('printf $(brew --prefix)'));
+define('BREW_PREFIX', '');
 
 define('ISOLATED_PHP_VERSION', 'ISOLATED_PHP_VERSION');
 

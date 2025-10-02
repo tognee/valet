@@ -80,8 +80,7 @@ then
     then
     # ngrok
         # Check to make sure ngrok is configured correctly
-        BREW_PREFIX=$(brew --prefix)
-        $($BREW_PREFIX/bin/ngrok config check >/dev/null 2>&1)
+        $(ngrok config check >/dev/null 2>&1)
 
         if [[ $? -ne 0 ]]; then
             echo "Please sign up for a free ngrok account and then run valet set-ngrok-token {yourTokenHere}."
@@ -95,7 +94,7 @@ then
             PORT=80
         fi
 
-        sudo -u "$USER" "$BREW_PREFIX/bin/ngrok" http "$HOST.$TLD:$PORT" --host-header=rewrite $PARAMS
+        sudo -u "$USER" "ngrok" http "$HOST.$TLD:$PORT" --host-header=rewrite $PARAMS
 
         exit
 

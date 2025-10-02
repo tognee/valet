@@ -109,7 +109,7 @@ class DnsMasq
         $tldConfigFile = $this->dnsmasqUserConfigDir().'tld-'.$tld.'.conf';
         $loopback = $this->configuration->read()['loopback'];
 
-        $this->files->putAsUser($tldConfigFile, 'address=/.'.$tld.'/'.$loopback.PHP_EOL.'listen-address='.$loopback.PHP_EOL);
+        $this->files->putAsUser($tldConfigFile, 'address=/.'.$tld.'/'.$loopback.PHP_EOL.'local=/'.$tld.'/'.PHP_EOL);
     }
 
     /**
@@ -149,6 +149,6 @@ class DnsMasq
      */
     public function dnsmasqUserConfigDir(): string
     {
-        return $_SERVER['HOME'].'/.config/valet/dnsmasq.d/';
+        return VALET_HOME_PATH.'/dnsmasq.d/';
     }
 }

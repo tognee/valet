@@ -10,20 +10,14 @@ if (php_sapi_name() !== 'cli') {
  */
 $inTestingEnvironment = strpos($_SERVER['SCRIPT_NAME'], 'phpunit') !== false;
 
-if (PHP_OS !== 'Darwin' && ! $inTestingEnvironment) {
-    echo 'Valet only supports the Mac operating system.'.PHP_EOL;
+if (PHP_OS !== 'Linux' && ! $inTestingEnvironment) {
+    echo 'Valet Linux only supports Linux operating systems.'.PHP_EOL;
 
     exit(1);
 }
 
 if (version_compare(PHP_VERSION, '8.0', '<')) {
     echo 'Valet requires PHP 8.0 or later.';
-
-    exit(1);
-}
-
-if (exec('which brew') == '' && ! $inTestingEnvironment) {
-    echo 'Valet requires Homebrew to be installed on your Mac.';
 
     exit(1);
 }

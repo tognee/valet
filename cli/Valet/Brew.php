@@ -8,75 +8,59 @@ use PhpFpm;
 
 class Brew
 {
-    // This is the array of PHP versions that Valet will attempt to install/configure when requested
+    // This is the array of PHP versions supported on Fedora repositories
     const SUPPORTED_PHP_VERSIONS = [
         'php',
-        'php@8.5',
-        'php@8.4',
-        'php@8.3',
-        'php@8.2',
-        'php@8.1',
-        'php@8.0',
-        'php@7.4',
-        'php@7.3',
-        'php@7.2',
-        'php@7.1',
+        'php8.5',
+        'php8.4',
+        'php8.3',
+        'php8.2',
+        'php8.1',
+        'php8.0',
+        'php7.4',
+        'php7.3',
+        'php7.2',
+        'php7.1',
     ];
 
     // Update this LATEST and the following LIMITED array when PHP versions are released or retired
     // We specify a numbered version here even though Homebrew links its generic 'php' alias to it
-    const LATEST_PHP_VERSION = 'php@8.4';
+    const LATEST_PHP_VERSION = 'php8.4';
 
-    // These are the PHP versions that should be installed via the shivammathur/php tap because
-    // Homebrew officially no longer bottles them or they're marked disabled in their formula
-    // Cue: Homebrew reports "php@7.4 has been disabled because it is a versioned formula"
+    // These are the PHP versions that should be installed via the remi repository because
+    // Fedora officially no longer provides them
     const LIMITED_PHP_VERSIONS = [
-        'php@8.0',
-        'php@7.4',
-        'php@7.3',
-        'php@7.2',
-        'php@7.1',
+        'php8.0',
+        'php7.4',
+        'php7.3',
+        'php7.2',
+        'php7.1',
     ];
 
-    const BREW_DISABLE_AUTO_CLEANUP = 'HOMEBREW_NO_INSTALL_CLEANUP=1';
+    // Not used in DNF implementation but kept for compatibility
+    const BREW_DISABLE_AUTO_CLEANUP = '';
 
     public function __construct(public CommandLine $cli, public Filesystem $files) {}
 
     /**
-     * Ensure the formula exists in the current Homebrew configuration.
+     * Ensure the package exists in the current DNF configuration.
      */
-    public function installed(string $formula): bool
+    public function installed(string $package): bool
     {
-        $result = $this->cli->runAsUser("brew info $formula --json=v2");
-
-        // should be a json response, but if not installed then "Error: No available formula ..."
-        if (starts_with($result, 'Error: No')) {
-            return false;
-        }
-
-        $details = json_decode($result, true);
-
-        if (! empty($details['formulae'])) {
-            return ! empty($details['formulae'][0]['installed']);
-        }
-
-        if (! empty($details['casks'])) {
-            return ! is_null($details['casks'][0]['installed']);
-        }
-
-        return false;
+        $result = $this->cli->runAsUser("dnf list installed $package 2>/dev/null");
+        return !empty($result) && !str_contains($result, 'No matching Packages');
     }
 
     /**
-     * Determine if a compatible PHP version is Homebrewed.
+     * Determine if a compatible PHP version is installed.
      */
     public function hasInstalledPhp(): bool
     {
-        $installed = $this->installedPhpFormulae()->first(function ($formula) {
-            return $this->supportedPhpVersions()->contains($formula);
+        $installed = $this->installedPhpPackages()->first(function ($package) {
+            return $this->supportedPhpVersions()->contains($package);
         });
 
-        return ! empty($installed);
+        return !empty($installed);
     }
 
     /**
@@ -96,95 +80,111 @@ class Brew
     }
 
     /**
-     * Get a list of installed PHP formulae.
+     * Get a list of installed PHP packages.
      */
-    public function installedPhpFormulae(): Collection
+    public function installedPhpPackages(): Collection
     {
         return collect(
-            explode(PHP_EOL, $this->cli->runAsUser('brew list --formula | grep php'))
-        );
+            explode(PHP_EOL, $this->cli->runAsUser('dnf list installed | grep -i "^php" | awk \'{print $1}\''))
+        )->filter();
     }
 
     /**
-     * Get the aliased formula version from Homebrew.
+     * Get the aliased version - not applicable in DNF context.
      */
     public function determineAliasedVersion($formula): string
     {
-        $details = json_decode($this->cli->runAsUser("brew info $formula --json"));
-
-        if (! empty($details[0]->aliases[0])) {
-            return $details[0]->aliases[0];
-        }
-
-        return 'ERROR - NO BREW ALIAS FOUND';
+        // DNF doesn't use aliases like Homebrew
+        return $formula;
     }
 
     /**
-     * Determine if a compatible nginx version is Homebrewed.
+     * Determine if nginx is installed.
      */
     public function hasInstalledNginx(): bool
     {
-        return $this->installed('nginx')
-            || $this->installed('nginx-full');
+        return $this->installed('nginx');
     }
 
     /**
-     * Return name of the nginx service installed via Homebrew.
+     * Return name of the nginx service.
      */
     public function nginxServiceName(): string
     {
-        return $this->installed('nginx-full') ? 'nginx-full' : 'nginx';
+        return 'nginx';
     }
 
     /**
-     * Ensure that the given formula is installed.
+     * Ensure that the given package is installed.
      */
-    public function ensureInstalled(string $formula, array $options = [], array $taps = []): void
+    public function ensureInstalled(string $package, array $options = [], array $repos = []): void
     {
-        if (! $this->installed($formula)) {
-            $this->installOrFail($formula, $options, $taps);
+        if (!$this->installed($package)) {
+            $this->installOrFail($package, $options, $repos);
         }
     }
 
     /**
-     * Install the given formula and throw an exception on failure.
+     * Install the given package and throw an exception on failure.
      */
-    public function installOrFail(string $formula, array $options = [], array $taps = []): void
+    public function installOrFail(string $package, array $options = [], array $repos = []): void
     {
-        info("Installing {$formula}...");
+        info("Installing {$package}...");
 
-        if (count($taps) > 0) {
-            $this->tap($taps);
+        if (count($repos) > 0) {
+            $this->enableRepo($repos);
         }
 
-        output('<info>['.$formula.'] is not installed, installing it now via Brew...</info> 🍻');
+        output("<info>[{$package}] is not installed, installing it now via DNF...</info> 🚀");
 
-        if ($this->limitedPhpVersions()->contains($formula)) {
-            $formula = 'shivammathur/php/'.$formula;
-            warning('Note: older PHP versions may take 10+ minutes to compile from source. Please wait ...');
+        if ($this->limitedPhpVersions()->contains($package)) {
+            $this->enableRemiRepo();
+            warning('Note: Installing PHP from Remi repository...');
         }
 
-        $this->cli->runAsUser(trim(static::BREW_DISABLE_AUTO_CLEANUP.' brew install '.$formula.' '.implode(' ', $options)), function ($exitCode, $errorOutput) use ($formula) {
+        $this->cli->runAsUser("sudo dnf install -y {$package} " . implode(' ', $options), function ($exitCode, $errorOutput) use ($package) {
             output($errorOutput);
-
-            throw new DomainException('Brew was unable to install ['.$formula.'].');
+            throw new DomainException("DNF was unable to install [{$package}].");
         });
     }
 
     /**
-     * Tap the given formulas.
+     * Enable DNF repositories - equivalent to tap in Homebrew.
      */
-    public function tap($formulas): void
+    public function tap($repos): void
     {
-        $formulas = is_array($formulas) ? $formulas : func_get_args();
+        $repos = is_array($repos) ? $repos : func_get_args();
+        $this->enableRepo($repos);
+    }
 
-        foreach ($formulas as $formula) {
-            $this->cli->passthru(static::BREW_DISABLE_AUTO_CLEANUP.' sudo -u "'.user().'" brew tap '.$formula);
+    /**
+     * Enable DNF repositories.
+     */
+    private function enableRepo($repos): void
+    {
+        $repos = is_array($repos) ? $repos : func_get_args();
+
+        foreach ($repos as $repo) {
+            $this->cli->runAsUser("sudo dnf config-manager --set-enabled {$repo}");
         }
     }
 
     /**
-     * Restart the given Homebrew services.
+     * Enable Remi repository for additional PHP versions.
+     */
+    private function enableRemiRepo(): void
+    {
+        if (!$this->installed('dnf-utils')) {
+            $this->installOrFail('dnf-utils');
+        }
+
+        if (!$this->installed('https://rpms.remirepo.net/fedora/remi-release-41.rpm')) {
+            $this->cli->runAsUser('sudo dnf install -y https://rpms.remirepo.net/fedora/remi-release-41.rpm');
+        }
+    }
+
+    /**
+     * Restart the given services.
      */
     public function restartService($services): void
     {
@@ -193,19 +193,13 @@ class Brew
         foreach ($services as $service) {
             if ($this->installed($service)) {
                 info("Restarting {$service}...");
-
-                // first we ensure that the service is not incorrectly running as non-root
-                $this->cli->quietly('brew services stop '.$service);
-                // stop the actual/correct sudo version
-                $this->cli->quietly('sudo brew services stop '.$service);
-                // start correctly as root
-                $this->cli->quietly('sudo brew services start '.$service);
+                $this->cli->quietly("sudo systemctl restart {$service}");
             }
         }
     }
 
     /**
-     * Stop the given Homebrew services.
+     * Stop the given services.
      */
     public function stopService($services): void
     {
@@ -214,49 +208,26 @@ class Brew
         foreach ($services as $service) {
             if ($this->installed($service)) {
                 info("Stopping {$service}...");
-
-                // first we ensure that the service is not incorrectly running as non-root
-                $this->cli->quietly('brew services stop '.$service);
-
-                // stop the sudo version
-                $this->cli->quietly('sudo brew services stop '.$service);
-
-                // restore folder permissions: for each brew formula, these directories are owned by root:admin
-                $directories = [
-                    BREW_PREFIX."/Cellar/$service",
-                    BREW_PREFIX."/opt/$service",
-                    BREW_PREFIX."/var/homebrew/linked/$service",
-                ];
-
-                $whoami = get_current_user();
-
-                foreach ($directories as $directory) {
-                    $this->cli->quietly("sudo chown -R {$whoami}:admin '$directory'");
-                }
+                $this->cli->quietly("sudo systemctl stop {$service}");
             }
         }
     }
 
     /**
-     * Determine if php is currently linked.
+     * Check if PHP is symlinked.
      */
     public function hasLinkedPhp(): bool
     {
-        return $this->files->isLink(BREW_PREFIX.'/bin/php');
+        // return $this->files->isLink('/usr/bin/php');
+        return true;
     }
 
     /**
-     * Get the linked php parsed.
+     * Get the linked PHP version information.
      */
     public function getParsedLinkedPhp(): array
     {
-        if (! $this->hasLinkedPhp()) {
-            throw new DomainException('Homebrew PHP appears not to be linked. Please run [valet use php@X.Y]');
-        }
-
-        $resolvedPath = $this->files->readLink(BREW_PREFIX.'/bin/php');
-
-        return $this->parsePhpPath($resolvedPath);
+        return $this->parsePhpPath('/usr/bin/php');
     }
 
     /**
@@ -267,12 +238,11 @@ class Brew
     public function getLinkedPhpFormula(): string
     {
         $matches = $this->getParsedLinkedPhp();
-
-        return $matches[1].$matches[2];
+        return $matches[1] . $matches[2];
     }
 
     /**
-     * Determine which version of PHP is linked in Homebrew.
+     * Determine which version of PHP is linked.
      */
     public function linkedPhp(): string
     {
@@ -288,174 +258,142 @@ class Brew
     }
 
     /**
-     * Extract PHP executable path from PHP Version.
-     *
-     * @param  string|null  $phpVersion  For example, "php@8.1"
+     * Get PHP executable path.
      */
     public function getPhpExecutablePath(?string $phpVersion = null): string
     {
-        if (! $phpVersion) {
-            return BREW_PREFIX.'/bin/php';
+        if (!$phpVersion) {
+            return '/usr/bin/php';
         }
 
-        $phpVersion = PhpFpm::normalizePhpVersion($phpVersion);
-
-        // Check the default `/opt/homebrew/opt/php@8.1/bin/php` location first
-        if ($this->files->exists(BREW_PREFIX."/opt/{$phpVersion}/bin/php")) {
-            return BREW_PREFIX."/opt/{$phpVersion}/bin/php";
+        $phpVersion = str_replace(['@', '.'], '', $phpVersion);
+        if ($this->files->exists("/usr/bin/php{$phpVersion}")) {
+            return "/usr/bin/php{$phpVersion}";
         }
 
-        // Check the `/opt/homebrew/opt/php71/bin/php` location for older installations
-        $phpVersion = str_replace(['@', '.'], '', $phpVersion); // php@8.1 to php81
-        if ($this->files->exists(BREW_PREFIX."/opt/{$phpVersion}/bin/php")) {
-            return BREW_PREFIX."/opt/{$phpVersion}/bin/php";
-        }
-
-        // Check if the default PHP is the version we are looking for
-        if ($this->files->isLink(BREW_PREFIX.'/opt/php')) {
-            $resolvedPath = $this->files->readLink(BREW_PREFIX.'/opt/php');
-            $matches = $this->parsePhpPath($resolvedPath);
-            $resolvedPhpVersion = $matches[3] ?: $matches[2];
-
-            if ($this->arePhpVersionsEqual($resolvedPhpVersion, $phpVersion)) {
-                return BREW_PREFIX.'/opt/php/bin/php';
-            }
-        }
-
-        return BREW_PREFIX.'/bin/php';
+        return '/usr/bin/php';
     }
 
     /**
-     * Restart the linked PHP-FPM Homebrew service.
+     * Restart the linked PHP-FPM service.
      */
     public function restartLinkedPhp(): void
     {
-        $this->restartService($this->getLinkedPhpFormula());
+        $phpVersion = $this->getLinkedPhpFormula();
+        $this->restartService("php{$phpVersion}-fpm");
     }
 
     /**
-     * Create the "sudoers.d" entry for running Brew.
+     * Create the "sudoers.d" entry - not needed in Linux/DNF context.
      */
     public function createSudoersEntry(): void
     {
-        $this->files->ensureDirExists('/etc/sudoers.d');
-
-        $this->files->put('/etc/sudoers.d/brew', 'Cmnd_Alias BREW = '.BREW_PREFIX.'/bin/brew *
-%admin ALL=(root) NOPASSWD:SETENV: BREW'.PHP_EOL);
+        // Not needed in DNF implementation as we use sudo directly
+        return;
     }
 
     /**
-     * Remove the "sudoers.d" entry for running Brew.
+     * Remove the "sudoers.d" entry - not needed in Linux/DNF context.
      */
     public function removeSudoersEntry(): void
     {
-        $this->cli->quietly('rm /etc/sudoers.d/brew');
+        // Not needed in DNF implementation as we use sudo directly
+        return;
     }
 
     /**
-     * Link passed formula.
+     * Link a package.
      */
-    public function link(string $formula, bool $force = false): string
+    public function link(string $package, bool $force = false): string
     {
-        return $this->cli->runAsUser(
-            sprintf('brew link %s%s', $formula, $force ? ' --force' : ''),
-            function ($exitCode, $errorOutput) use ($formula) {
-                output($errorOutput);
+        $target = "/usr/bin/{$package}";
+        $source = $this->getPhpExecutablePath($package);
 
-                throw new DomainException('Brew was unable to link ['.$formula.'].');
+        return $this->cli->runAsUser(
+            sprintf('sudo ln -sf %s %s', $source, $target),
+            function ($exitCode, $errorOutput) use ($package) {
+                output($errorOutput);
+                throw new DomainException("Unable to link [{$package}].");
             }
         );
     }
 
     /**
-     * Unlink passed formula.
+     * Unlink a package.
      */
-    public function unlink(string $formula): string
+    public function unlink(string $package): string
     {
         return $this->cli->runAsUser(
-            sprintf('brew unlink %s', $formula),
-            function ($exitCode, $errorOutput) use ($formula) {
+            sprintf('sudo rm -f /usr/bin/%s', $package),
+            function ($exitCode, $errorOutput) use ($package) {
                 output($errorOutput);
-
-                throw new DomainException('Brew was unable to unlink ['.$formula.'].');
+                throw new DomainException("Unable to unlink [{$package}].");
             }
         );
     }
 
     /**
-     * Get all the currently running brew services.
+     * Get all running services.
      */
     public function getAllRunningServices(): Collection
     {
-        return $this->getRunningServicesAsRoot()
-            ->concat($this->getRunningServicesAsUser())
-            ->unique();
+        return $this->getRunningServicesAsRoot();
     }
 
     /**
-     * Get the currently running brew services as root.
-     * i.e. /Library/LaunchDaemons (started at boot).
+     * Get services running as root.
      */
     public function getRunningServicesAsRoot(): Collection
     {
-        return $this->getRunningServices();
+        return collect(explode(PHP_EOL, $this->cli->run(
+            'systemctl list-units --type=service --state=running | grep php | awk \'{print $1}\''
+        )))->filter();
     }
 
     /**
-     * Get the currently running brew services.
-     * i.e. ~/Library/LaunchAgents (started at login).
+     * Get services running as user - not applicable in Linux/systemd context.
      */
     public function getRunningServicesAsUser(): Collection
     {
-        return $this->getRunningServices(true);
+        // All services run as root in systemd
+        return collect([]);
     }
 
     /**
-     * Get the currently running brew services.
+     * Get running services with optional user context - not needed in Linux/systemd.
      */
     public function getRunningServices(bool $asUser = false): Collection
     {
-        $command = 'brew services list | grep started | awk \'{ print $1; }\'';
-        $onError = function ($exitCode, $errorOutput) {
-            output($errorOutput);
-
-            throw new DomainException('Brew was unable to check which services are running.');
-        };
-
-        return collect(array_filter(explode(PHP_EOL, $asUser
-            ? $this->cli->runAsUser($command, $onError)
-            : $this->cli->run('sudo '.$command, $onError)
-        )));
+        return $this->getRunningServicesAsRoot();
     }
 
     /**
-     * Tell Homebrew to forcefully remove all PHP versions that Valet supports.
+     * Uninstall all PHP versions.
      */
     public function uninstallAllPhpVersions(): string
     {
-        $this->supportedPhpVersions()->each(function ($formula) {
-            $this->uninstallFormula($formula);
+        $this->supportedPhpVersions()->each(function ($package) {
+            $this->uninstallPackage($package);
         });
 
         return 'PHP versions removed.';
     }
 
     /**
-     * Uninstall a Homebrew app by formula name.
+     * Uninstall a package.
      */
-    public function uninstallFormula(string $formula): void
+    public function uninstallPackage(string $package): void
     {
-        $this->cli->runAsUser(static::BREW_DISABLE_AUTO_CLEANUP.' brew uninstall --force '.$formula);
-        $this->cli->run('rm -rf '.BREW_PREFIX.'/Cellar/'.$formula);
+        $this->cli->runAsUser("sudo dnf remove -y {$package}");
     }
 
     /**
-     * Run Homebrew's cleanup commands.
+     * Clean up package manager cache.
      */
     public function cleanupBrew(): string
     {
         return $this->cli->runAsUser(
-            'brew cleanup && brew services cleanup',
+            'sudo dnf clean all',
             function ($exitCode, $errorOutput) {
                 output($errorOutput);
             }
@@ -463,24 +401,16 @@ class Brew
     }
 
     /**
-     * Parse homebrew PHP Path.
+     * Parse PHP path to extract version information.
      */
     public function parsePhpPath(string $resolvedPath): array
     {
-        /**
-         * Typical homebrew path resolutions are like:
-         * "../Cellar/php@7.4/7.4.13/bin/php"
-         * or older styles:
-         * "../Cellar/php/7.4.9_2/bin/php
-         * "../Cellar/php55/bin/php.
-         */
-        preg_match('~\w{3,}/(php)(@?\d\.?\d)?/(\d\.\d)?([_\d\.]*)?/?\w{3,}~', $resolvedPath, $matches);
-
+        preg_match('~(/usr/bin/)(php)(\d\.\d)?~', $resolvedPath, $matches);
         return $matches;
     }
 
     /**
-     * Check if two PHP versions are equal.
+     * Compare PHP versions for equality.
      */
     public function arePhpVersionsEqual(string $versionA, string $versionB): bool
     {
