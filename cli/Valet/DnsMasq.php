@@ -8,7 +8,7 @@ class DnsMasq
 
     public $dnsmasqSystemConfDir = BREW_PREFIX.'/etc/dnsmasq.d';
 
-    public $resolverPath = '/etc/resolver';
+    public $resolverPath = '/etc/systemd/resolved.conf.d';
 
     public function __construct(public Brew $brew, public CommandLine $cli, public Filesystem $files, public Configuration $configuration) {}
 
@@ -46,7 +46,7 @@ class DnsMasq
         // delete it if Herd is not installed.
         if (! $this->files->exists('/Applications/Herd.app')) {
             $tld = $this->configuration->read()['tld'];
-            $this->files->unlink($this->resolverPath.'/'.$tld);
+            $this->files->unlink($this->resolverPath.'/'.$tld.'.conf');
         }
     }
 
@@ -120,7 +120,7 @@ class DnsMasq
         $this->files->ensureDirExists($this->resolverPath);
         $loopback = $this->configuration->read()['loopback'];
 
-        $this->files->put($this->resolverPath.'/'.$tld, 'nameserver '.$loopback.PHP_EOL);
+        $this->files->put($this->resolverPath.'/'.$tld.'.conf', '[Resolve]\nDNS='.$loopback.'\nDomains=~'.$tld.PHP_EOL);
     }
 
     /**
@@ -128,7 +128,7 @@ class DnsMasq
      */
     public function updateTld(string $oldTld, string $newTld): void
     {
-        $this->files->unlink($this->resolverPath.'/'.$oldTld);
+        $this->files->unlink($this->resolverPath.'/'.$oldTld.'.conf');
         $this->files->unlink($this->dnsmasqUserConfigDir().'tld-'.$oldTld.'.conf');
 
         $this->install($newTld);
