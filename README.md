@@ -1,3 +1,18 @@
+## Fedora Fork
+
+This is a fork of the original Laravel Valet project, modified to work with Fedora.
+
+Main modifications:
+- Replace Brew package manager with DNF
+- Replace Brew services with systemd services
+- Remove Brew path references
+- Replace resolver with systemd-resolved
+- Fix dnsmasq configuration using local=/test/ instead of listen-address=127.0.0.1
+- Added temp directories for nginx under valet user (to solve permission issues due to changing the default nginx user)
+- Replace security certificate generation with update-ca-certificates
+
+---
+
 <p align="center"><img width="304" height="52" src="/art/logo.svg"></p>
 
 <p align="center">
