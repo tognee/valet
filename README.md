@@ -11,6 +11,36 @@ Main modifications:
 - Added temp directories for nginx under valet user (to solve permission issues due to changing the default nginx user)
 - Replace security certificate generation with update-ca-certificates
 
+### Installation
+- Install nginx and dnsmasq manually
+- Add this to your `~/.config/composer/composer.json`:
+```json
+{
+    ...
+    "repositories": [
+        {
+            "type": "git",
+            "url": "https://github.com/tognee/valet-for-fedora.git"
+        }
+    ]
+}
+```
+- Install valet: `composer global require laravel/valet:dev-fedora`
+- Run valet install: `valet install`
+
+### SELinux
+
+If you are using SELinux, you may need to run the following command to allow valet to access the necessary files:
+
+```bash
+sudo setsebool -P httpd_can_network_connect 1
+sudo semanage fcontext -a -t httpd_sys_content_t "$HOME/.config/valet(/.*)?"
+sudo semanage fcontext -a -t httpd_sys_rw_content_t "$HOME/.config/valet/Temp(/.*)?"
+sudo semanage fcontext -a -t httpd_sys_rw_content_t "$HOME/.config/valet/Log(/.*)?"
+sudo semanage fcontext -a -t httpd_sys_rw_content_t "$HOME/.config/valet/valet.sock"
+sudo semanage fcontext -a -t httpd_sys_content_t "$HOME/.config/composer/vendor/laravel/valet(/.*)?"
+```
+
 ---
 
 <p align="center"><img width="304" height="52" src="/art/logo.svg"></p>
